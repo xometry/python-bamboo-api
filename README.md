@@ -34,5 +34,7 @@ but you can get all the builds using the expand arg:
 
 The supported methods are:
 
-* get_builds: List of builds
+* get_builds: Generator
+* get_deployments: Generator
+* get_environment_results: Generator
 

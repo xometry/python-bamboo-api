@@ -17,6 +17,8 @@ class BambooAPIClient(object):
 
     # Endpoints
     BUILD_SERVICE = '/rest/api/latest/result'
+    DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
+    ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
 
     @property
     def build_url(self):
@@ -24,6 +26,20 @@ class BambooAPIClient(object):
         URL to the builds service.
         """
         return '{}:{}{}'.format(self._host, self._port, self.BUILD_SERVICE)
+
+    @property
+    def deployment_url(self):
+        """
+        URL to the deployment service.
+        """
+        return '{}:{}{}'.format(self._host, self._port, self.DEPLOY_SERVICE)
+
+    @property
+    def environment_url(self):
+        """
+        URL to the environment service.
+        """
+        return '{}:{}{}'.format(self._host, self._port, self.ENVIRONMENT_SERVICE)
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -35,32 +51,72 @@ class BambooAPIClient(object):
         if user and password:
             self._call_params['auth'] = HTTPBasicAuth(user, password)
 
-    def _get_response(self, url, queryset=None):
+    def _get_response(self, url, params=None):
         """
         Make the call to the service with the given queryset and whatever params
         were set initially (auth).
         """
-        res = requests.get(url, data=queryset or {}, **self._call_params)
+        res = requests.get(url,  params=params or {}, headers={'Accept': 'application/json'}, **self._call_params)
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
 
-    def get_builds(self, project_key=None, expand=False):
+    def get_builds(self, plan_key=None, expand=False):
         """
         Returns the list of builds set up on the Bamboo server.
-        :param project_key: str
+        :param plan_key: str
         :param expand: boolean
-        :return: List
+        :return: Generator
         """
-
-        qs = None
-        if expand:
-            qs = {'expand': 'results[1:]'}
+        qs = {'max-results': 25, 'start-index': 0}
         url = self.build_url
-        if project_key is not None:
-            url = "{}/{}".format(url, project_key)
+        if expand:
+            qs['expand'] = 'results.result'
 
-        res = self._get_response(url, qs).json()
-        # Yield response
-        for result in res['results']['result']:
-            yield result
+        if plan_key is not None:
+            url = "{}/{}".format(url, plan_key)
+            size = 1
+            # Cycle through results
+            while size > 0:
+                response = self._get_response(url, qs).json()
+                size = len(response['results']['result'])
+                qs['start-index'] += qs['max-results']
+                for r in response['results']['result']:
+                    yield r
+        else:
+            response = self._get_response(url, qs).json()
+            for r in response['results']['result']:
+                yield r
+
+    def get_deployments(self, project_key=None):
+        """
+        Returns the list of deployment projects set up on the Bamboo server.
+        :param project_key: str
+        :return: Generator
+        """
+        param = 'all'
+        if project_key is not None:
+            param = project_key
+        url = "{}/{}".format(self.deployment_url, param)
+        response = self._get_response(url).json()
+        for r in response:
+            yield r
+
+    def get_environment_results(self, environment_id):
+        """
+        Returns the list of environment results.
+        :param environment_id: int
+        :return: Generator
+        """
+        qs = {'max-results': 25, 'start-index': 0}
+        url = self.environment_url.format(env_id=environment_id)
+
+        size = 1
+        while size > 0:
+            response = self._get_response(url, qs).json()
+            size = len(response['results'])
+
+            qs['start-index'] += qs['max-results']
+
+            for r in response['results']:
+                yield r
