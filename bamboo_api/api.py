@@ -90,7 +90,6 @@ class BambooAPIClient(object):
         size = 1
         while size > 0:
             # Get results and yield them
-            import pdb; pdb.set_trace()
             response = self._get_response(url, qs).json()
             data = response['results']['result']
             for r in data:
