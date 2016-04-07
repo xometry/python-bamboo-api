@@ -2,12 +2,8 @@
 This module contains the BambooAPIClient, used for communicating with the
 Bamboo server web service API.
 """
-import logging
 
 import requests
-
-
-logger = logging.getLogger()
 
 
 class BambooAPIClient(object):
@@ -66,14 +62,13 @@ class BambooAPIClient(object):
         if expand:
             qs['expand'] = 'results.result'
 
-        # Get url: do we want build for a specific plan
+        # Get url
         if plan_key:
-            # Yes, just one plan
+            # All builds for one plan
             url = '{}/{}'.format(self._get_url(self.BUILD_SERVICE), plan_key)
         else:
-            # I see you like to live dangerously...
+            # Latest build for all plans
             url = self._get_url(self.BUILD_SERVICE)
-            logger.warning("Getting all builds for all plans, which can be a lot!")
 
         # Cycle through paged results
         size = 1
