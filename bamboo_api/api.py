@@ -5,7 +5,7 @@ Bamboo server web service API.
 import logging
 
 import requests
-from requests.auth import HTTPBasicAuth
+
 
 logger = logging.getLogger()
 
@@ -30,16 +30,16 @@ class BambooAPIClient(object):
         """
         self._host = host or self.DEFAULT_HOST
         self._port = port or self.DEFAULT_PORT
-        self._call_params = {}
+        self._session = requests.Session()
         if user and password:
-            self._call_params['auth'] = HTTPBasicAuth(user, password)
+            self._session.auth = (user, password)
 
     def _get_response(self, url, params=None):
         """
         Make the call to the service with the given queryset and whatever params
         were set initially (auth).
         """
-        res = requests.get(url,  params=params or {}, headers={'Accept': 'application/json'}, **self._call_params)
+        res = self._session.get(url,  params=params or {}, headers={'Accept': 'application/json'})
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
