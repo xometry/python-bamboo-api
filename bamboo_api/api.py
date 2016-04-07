@@ -22,27 +22,7 @@ class BambooAPIClient(object):
     BUILD_SERVICE = '/rest/api/latest/result'
     DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
-
-    @property
-    def build_url(self):
-        """
-        URL to the builds service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.BUILD_SERVICE)
-
-    @property
-    def deployment_url(self):
-        """
-        URL to the deployment service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.DEPLOY_SERVICE)
-
-    @property
-    def environment_url(self):
-        """
-        URL to the environment service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.ENVIRONMENT_SERVICE)
+    PLAN_SERVICE = '/rest/api/latest/plan'
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -64,6 +44,15 @@ class BambooAPIClient(object):
             raise Exception(res.reason)
         return res
 
+    def _get_url(self, endpoint):
+        """
+        Get full url string for host, port and given endpoint.
+
+        :param endpoint: path to service endpoint
+        :return: full url to make request
+        """
+        return '{}:{}{}'.format(self._host, self._port, endpoint)
+
     def get_builds(self, plan_key=None, expand=False):
         """
         Get the builds in the Bamboo server.
@@ -80,10 +69,10 @@ class BambooAPIClient(object):
         # Get url: do we want build for a specific plan
         if plan_key:
             # Yes, just one plan
-            url = '{}/{}'.format(self.build_url, plan_key)
+            url = '{}/{}'.format(self._get_url(self.BUILD_SERVICE), plan_key)
         else:
             # I see you like to live dangerously...
-            url = self.build_url
+            url = self._get_url(self.BUILD_SERVICE)
             logger.warning("Getting all builds for all plans, which can be a lot!")
 
         # Cycle through paged results
@@ -106,7 +95,7 @@ class BambooAPIClient(object):
         :param project_key: str
         :return: Generator
         """
-        url = "{}/{}".format(self.deployment_url, project_key or 'all')
+        url = "{}/{}".format(self._get_url(self.DEPLOY_SERVICE), project_key or 'all')
         response = self._get_response(url).json()
         for r in response:
             yield r
@@ -121,7 +110,7 @@ class BambooAPIClient(object):
         qs = {'max-result': 25, 'start-index': 0}
 
         # Get url for results
-        url = self.environment_url.format(env_id=environment_id)
+        url = self._get_url(self.ENVIRONMENT_SERVICE.format(env_id=environment_id))
 
         # Cycle through paged results
         size = 1
@@ -136,3 +125,30 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += response['max-result']
 
+    def get_plans(self, expand=False):
+        """
+        Return all the plans in a Bamboo server.
+
+        :return: generator of plans
+        """
+        # Build starting qs params
+        qs = {'max-result': 25, 'start-index': 0}
+        if expand:
+            qs['expand'] = 'plans.plan'
+
+        # Get url for results
+        url = self._get_url(self.PLAN_SERVICE)
+
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield plans
+            response = self._get_response(url, qs).json()
+            plans = response['plans']
+            size = plans['size']
+            for r in plans['plan']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += plans['max-result']
