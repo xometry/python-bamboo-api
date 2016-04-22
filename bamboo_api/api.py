@@ -72,17 +72,25 @@ class BambooAPIClient(object):
 
         # Cycle through paged results
         size = 1
-        while qs['start-index'] < size:
-            # Get page, update page size and yield results
+        while size:
+            # Get page, update page and size
             response = self._get_response(url, qs).json()
             results = response['results']
             size = results['size']
+
+            # Check if start index was reset
+            # Note: see https://github.com/liocuevas/python-bamboo-api/issues/6
+            if results['start-index'] < qs['start-index']:
+                # Not the page we wanted, abort
+                break
+
+            # Yield results
             for r in results['result']:
                 yield r
 
             # Update paging info
             # Note: do this here to keep it current with yields
-            qs['start-index'] += results['max-result']
+            qs['start-index'] += size
 
     def get_deployments(self, project_key=None):
         """
