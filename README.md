@@ -1,14 +1,14 @@
 # Python Bamboo API
 
-Client for Bamboo REST API, providing basic authentication and a few methods to fetch
-builds and deployments.
+Client for Bamboo REST API, providing basic authentication and a few methods 
+to fetch plans, builds and deployments.
 
 
 ## Installation
 
-Install from this repository:
+Install from pypi:
 
-    pip install -e git+git@github.com:liocuevas/python-bamboo-api.git#egg=bamboo_api
+    pip install bamboo_api
 
 
 ## Usage
@@ -21,8 +21,9 @@ Example use:
     for build in bamboo.get_builds():
         # do something with builds results...
 
-You can also specify a single project to fetch by default it will return the latest builds
-but you can get all the builds using the expand arg:
+By default it will return the latest build for every plan, but you can 
+also specify a single plan to fetch all the builds for it, and expand 
+to get more detailed information:
 
     bamboo = BambooAPIClient(user='admin', password='admin')
     for build in bamboo.get_builds(project_key='MYPRJ-KEY', expand=True):
@@ -34,7 +35,7 @@ but you can get all the builds using the expand arg:
 
 The supported methods are:
 
-* get_builds: Generator
-* get_deployments: Generator
-* get_environment_results: Generator
-
+* get_builds: generator that yields builds
+* get_deployments: generator that yields deployment projects
+* get_environment_results: generator that yields deployment results
+* get_plans: generator that yields plans

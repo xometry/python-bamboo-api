@@ -4,7 +4,6 @@ Bamboo server web service API.
 """
 
 import requests
-from requests.auth import HTTPBasicAuth
 
 
 class BambooAPIClient(object):
@@ -19,27 +18,7 @@ class BambooAPIClient(object):
     BUILD_SERVICE = '/rest/api/latest/result'
     DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
-
-    @property
-    def build_url(self):
-        """
-        URL to the builds service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.BUILD_SERVICE)
-
-    @property
-    def deployment_url(self):
-        """
-        URL to the deployment service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.DEPLOY_SERVICE)
-
-    @property
-    def environment_url(self):
-        """
-        URL to the environment service.
-        """
-        return '{}:{}{}'.format(self._host, self._port, self.ENVIRONMENT_SERVICE)
+    PLAN_SERVICE = '/rest/api/latest/plan'
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -47,46 +26,71 @@ class BambooAPIClient(object):
         """
         self._host = host or self.DEFAULT_HOST
         self._port = port or self.DEFAULT_PORT
-        self._call_params = {}
+        self._session = requests.Session()
         if user and password:
-            self._call_params['auth'] = HTTPBasicAuth(user, password)
+            self._session.auth = (user, password)
 
     def _get_response(self, url, params=None):
         """
         Make the call to the service with the given queryset and whatever params
         were set initially (auth).
         """
-        res = requests.get(url,  params=params or {}, headers={'Accept': 'application/json'}, **self._call_params)
+        res = self._session.get(url,  params=params or {}, headers={'Accept': 'application/json'})
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
 
+    def _get_url(self, endpoint):
+        """
+        Get full url string for host, port and given endpoint.
+
+        :param endpoint: path to service endpoint
+        :return: full url to make request
+        """
+        return '{}:{}{}'.format(self._host, self._port, endpoint)
+
     def get_builds(self, plan_key=None, expand=False):
         """
-        Returns the list of builds set up on the Bamboo server.
+        Get the builds in the Bamboo server.
+
         :param plan_key: str
         :param expand: boolean
         :return: Generator
         """
-        qs = {'max-results': 25, 'start-index': 0}
-        url = self.build_url
+        # Build starting qs params
+        qs = {'max-result': 25, 'start-index': 0}
         if expand:
             qs['expand'] = 'results.result'
 
-        if plan_key is not None:
-            url = "{}/{}".format(url, plan_key)
-            size = 1
-            # Cycle through results
-            while size > 0:
-                response = self._get_response(url, qs).json()
-                size = len(response['results']['result'])
-                qs['start-index'] += qs['max-results']
-                for r in response['results']['result']:
-                    yield r
+        # Get url
+        if plan_key:
+            # All builds for one plan
+            url = '{}/{}'.format(self._get_url(self.BUILD_SERVICE), plan_key)
         else:
+            # Latest build for all plans
+            url = self._get_url(self.BUILD_SERVICE)
+
+        # Cycle through paged results
+        size = 1
+        while size:
+            # Get page, update page and size
             response = self._get_response(url, qs).json()
-            for r in response['results']['result']:
+            results = response['results']
+            size = results['size']
+
+            # Check if start index was reset
+            # Note: see https://github.com/liocuevas/python-bamboo-api/issues/6
+            if results['start-index'] < qs['start-index']:
+                # Not the page we wanted, abort
+                break
+
+            # Yield results
+            for r in results['result']:
                 yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += size
 
     def get_deployments(self, project_key=None):
         """
@@ -94,10 +98,7 @@ class BambooAPIClient(object):
         :param project_key: str
         :return: Generator
         """
-        param = 'all'
-        if project_key is not None:
-            param = project_key
-        url = "{}/{}".format(self.deployment_url, param)
+        url = "{}/{}".format(self._get_url(self.DEPLOY_SERVICE), project_key or 'all')
         response = self._get_response(url).json()
         for r in response:
             yield r
@@ -108,15 +109,49 @@ class BambooAPIClient(object):
         :param environment_id: int
         :return: Generator
         """
-        qs = {'max-results': 25, 'start-index': 0}
-        url = self.environment_url.format(env_id=environment_id)
+        # Build starting qs params
+        qs = {'max-result': 25, 'start-index': 0}
 
+        # Get url for results
+        url = self._get_url(self.ENVIRONMENT_SERVICE.format(env_id=environment_id))
+
+        # Cycle through paged results
         size = 1
-        while size > 0:
+        while qs['start-index'] < size:
+            # Get page, update page size and yield results
             response = self._get_response(url, qs).json()
-            size = len(response['results'])
-
-            qs['start-index'] += qs['max-results']
-
+            size = response['size']
             for r in response['results']:
                 yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += response['max-result']
+
+    def get_plans(self, expand=False):
+        """
+        Return all the plans in a Bamboo server.
+
+        :return: generator of plans
+        """
+        # Build starting qs params
+        qs = {'max-result': 25, 'start-index': 0}
+        if expand:
+            qs['expand'] = 'plans.plan'
+
+        # Get url for results
+        url = self._get_url(self.PLAN_SERVICE)
+
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield plans
+            response = self._get_response(url, qs).json()
+            plans = response['plans']
+            size = plans['size']
+            for r in plans['plan']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += plans['max-result']
