@@ -193,7 +193,9 @@ class BambooAPIClient(object):
         :param project_key: str
         :return: Generator
         """
-        url = "{}/{}{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all', '-'+build_number or '')
+        if build_number != None and project_key != None:
+            project_key = project_key + '-' + build_number
+        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
         response = self._get_response(url).json()
         return response
 
