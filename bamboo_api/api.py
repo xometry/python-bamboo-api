@@ -183,7 +183,7 @@ class BambooAPIClient(object):
         """
         List all builds currently in the Queue
         """
-        url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE))
+        url = "{}".format(self._get_url(self.QUEUE_SERVICE))
         return self._get_response(url).json()
     
 
