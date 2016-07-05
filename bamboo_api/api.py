@@ -174,7 +174,7 @@ class BambooAPIClient(object):
 
         :param project_key: str
         """
-        url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), project_key)
+        url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)
         return self._post_response(url).json()
 
 
