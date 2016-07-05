@@ -187,15 +187,14 @@ class BambooAPIClient(object):
         return self._get_response(url).json()
     
 
-    def get_results(self, project_key=None):
+    def get_results(self, project_key=None, build_number=None):
         """
         Returns a list of results for builds
         :param project_key: str
         :return: Generator
         """
-        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
+        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all', '-'+build_number or '')
         response = self._get_response(url).json()
-        for r in response:
-            yield r
+        return response
 
 
