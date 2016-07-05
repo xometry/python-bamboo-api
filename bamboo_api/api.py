@@ -20,6 +20,7 @@ class BambooAPIClient(object):
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
     PLAN_SERVICE = '/rest/api/latest/plan'
     QUEUE_SERVICE = '/rest/api/latest/queue'
+    RESULT_SERVICE = '/rest/api/latest/result'
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -177,5 +178,24 @@ class BambooAPIClient(object):
         url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)
         return self._post_response(url).json()
 
+
+    def get_build_queue(self):
+        """
+        List all builds currently in the Queue
+        """
+        url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE))
+        return self._get_response(url).json()
+    
+
+    def get_results(self, project_key=None):
+        """
+        Returns a list of results for builds
+        :param project_key: str
+        :return: Generator
+        """
+        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
+        response = self._get_response(url).json()
+        for r in response:
+            yield r
 
 
