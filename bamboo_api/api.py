@@ -19,6 +19,7 @@ class BambooAPIClient(object):
     DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
     PLAN_SERVICE = '/rest/api/latest/plan'
+    QUEUE_SERVICE = '/rest/api/latest/queue'
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -36,6 +37,16 @@ class BambooAPIClient(object):
         were set initially (auth).
         """
         res = self._session.get(url,  params=params or {}, headers={'Accept': 'application/json'})
+        if res.status_code != 200:
+            raise Exception(res.reason)
+        return res
+
+    def _post_response(self, url, params=None):
+        """
+        Post to the service with the given queryset and whatever params
+        were set initially (auth).
+        """
+        res = self._session.post(url, params=params or {}, headers={'Accept': 'application/json'})
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
@@ -155,3 +166,16 @@ class BambooAPIClient(object):
             # Update paging info
             # Note: do this here to keep it current with yields
             qs['start-index'] += plans['max-result']
+
+
+    def queue_build(self, plan_key):
+        """
+        Queue a build for building
+
+        :param project_key: str
+        """
+        url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), project_key)
+        return self._post_response(url).json()
+
+
+
