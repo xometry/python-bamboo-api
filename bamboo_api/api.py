@@ -16,11 +16,17 @@ class BambooAPIClient(object):
 
     # Endpoints
     BUILD_SERVICE = '/rest/api/latest/result'
+    PROJECT_SERVICE= 'rest/api/latest/project'
     DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
     PLAN_SERVICE = '/rest/api/latest/plan'
     QUEUE_SERVICE = '/rest/api/latest/queue'
     RESULT_SERVICE = '/rest/api/latest/result'
+
+    BRANCH_SERVICE = PLAN_SERVICE + '/{key}/branch'
+    BRANCH_RESULT_SERVICE = RESULT_SERVICE + '/{key}/branch/{branch_name}'
+
+    DELETE_ACTION = '/chain/admin/deleteChain!doDelete.action'
 
     def __init__(self, host=None, port=None, user=None, password=None):
         """
@@ -42,12 +48,12 @@ class BambooAPIClient(object):
             raise Exception(res.reason)
         return res
 
-    def _post_response(self, url, params=None):
+    def _post_response(self, url, params=None, data=None):
         """
         Post to the service with the given queryset and whatever params
         were set initially (auth).
         """
-        res = self._session.post(url, params=params or {}, headers={'Accept': 'application/json'})
+        res = self._session.post(url, params=params or {}, headers={'Accept': 'application/json'}, data=data or {})
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
@@ -169,6 +175,57 @@ class BambooAPIClient(object):
             qs['start-index'] += plans['max-result']
 
 
+    def get_branches(self, plan_key, enabled_only=False):
+        """
+        Return all branches in a plan.
+        
+        :param plan_key: str
+        :param enabled_only: bool
+
+        :return: Generator
+        """
+        #Build qs params
+        qs = {'max-result': 25, 'start-index': 0}
+        if enabled_only:
+            qs['enabledOnly'] = 'true'
+
+        # Get url for results
+        url = self._get_url(self.BRANCH_SERVICE.format(key=plan_key))
+
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield branches
+            response = self._get_response(url, qs).json()
+            branches = response['branches']
+            size = branches['size']
+            for r in branches['branch']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += branches['max-result']
+
+    def delete_plan(self, build_key):
+        """
+        Delete a plan or plan branch with its key.
+
+        :param build_key: str
+
+        :return: dict Response
+        """
+        # Build qs params
+        qs = {}
+
+        # Get url
+        url = self._get_url(self.DELETE_ACTION)
+        
+        # Build Data Object
+        data={'buildKey' : build_key}
+
+        r = self._post_response(url, data=data)
+        r.raise_for_status()
+
     def queue_build(self, plan_key):
         """
         Queue a build for building
@@ -199,4 +256,77 @@ class BambooAPIClient(object):
         response = self._get_response(url).json()
         return response
 
+    def get_branch_results(self, plan_key, branch_name, expand=None, favorite=False,
+                           labels=None, issue_keys=None, include_all_states=False,
+                           continuable=False, build_state=None):
+        """
+        Returns a list of results for plan branch builds
+
+        :param plan_key: str
+        :param branch_name: str
+        :param expand: str
+        :param favorite: bool
+        :param labels: list
+        :param issue_keys: list
+        :param include_all_states: bool
+        :param continuable: bool
+        :param build_state: str
+
+        :return: Generator
+        """
+        #Build qs params
+        qs = {'max-result': 25, 'start-index': 0}
+        if expand:
+            valid_expands = ('artifacts',
+                             'comments', 
+                             'labels',
+                             'jiraIssues',
+                             'stages',
+                             'stages.stage',
+                             'stages.stage.results',
+                             'stages.stage.results.result')
+            if expand not in valid_expands:
+                raise ValueError('Incorrect value for \'expand\'. Valid values include: %s', ','.join(valid_expands))
+            qs['enabledOnly'] = expand
+        if favorite:
+            qs['favorite'] = True
+        if labels:
+            qs['label'] = ','.join(labels)
+        if issue_keys:
+            qs['issueKey'] = ','.join(issue_keys)
+        if include_all_states:
+            qs['includeAllStates'] = True
+        if continuable:
+            qs['continuable'] = True
+        if build_state:
+            valid_build_states = ('Successful', 'Failed', 'Unknown')
+            if build_state not in valid_build_states:
+                raise ValueError('Incorrect value for \'build_state\'. Valid values include: %s', ','.join(valid_build_states))
+            qs['build_state'] = build_state
+
+        # Get url for results
+        url = self._get_url(self.BRANCH_RESULT_SERVICE.format(key=plan_key, branch_name=branch_name))
+
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield branches
+            response = self._get_response(url, qs).json()
+            results = response['results']
+            size = results['size']
+            for r in results['result']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += results['max-result']
+
+
+    def get_projects(self):
+        """
+        List all projects
+        """
+        url = "{}".format(self._get_url(self.PROJECT_SERVICE))
+        response = self._get_response(url).json()
+        return response
 
