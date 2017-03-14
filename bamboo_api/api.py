@@ -22,6 +22,7 @@ class BambooAPIClient(object):
     PLAN_SERVICE = '/rest/api/latest/plan'
     QUEUE_SERVICE = '/rest/api/latest/queue'
     RESULT_SERVICE = '/rest/api/latest/result'
+    SERVER_SERVICE = '/rest/api/latest/server'
 
     BRANCH_SERVICE = PLAN_SERVICE + '/{key}/branch'
     BRANCH_RESULT_SERVICE = RESULT_SERVICE + '/{key}/branch/{branch_name}'
@@ -67,7 +68,7 @@ class BambooAPIClient(object):
         """
         return '{}:{}{}'.format(self._host, self._port, endpoint)
 
-    def get_builds(self, plan_key=None, expand=False):
+    def get_builds(self, plan_key=None, expand='', max_result=25):
         """
         Get the builds in the Bamboo server.
 
@@ -76,9 +77,7 @@ class BambooAPIClient(object):
         :return: Generator
         """
         # Build starting qs params
-        qs = {'max-result': 25, 'start-index': 0}
-        if expand:
-            qs['expand'] = 'results.result'
+        qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand+",results.result").lstrip(',')}
 
         # Get url
         if plan_key:
@@ -121,14 +120,14 @@ class BambooAPIClient(object):
         for r in response:
             yield r
 
-    def get_environment_results(self, environment_id):
+    def get_environment_results(self, environment_id, max_result=25):
         """
         Returns the list of environment results.
         :param environment_id: int
         :return: Generator
         """
         # Build starting qs params
-        qs = {'max-result': 25, 'start-index': 0}
+        qs = {'max-result': max_result, 'start-index': 0}
 
         # Get url for results
         url = self._get_url(self.ENVIRONMENT_SERVICE.format(env_id=environment_id))
@@ -146,14 +145,14 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += response['max-result']
 
-    def get_plans(self, expand=False):
+    def get_plans(self, expand=False, max_result=25):
         """
         Return all the plans in a Bamboo server.
 
         :return: generator of plans
         """
         # Build starting qs params
-        qs = {'max-result': 25, 'start-index': 0}
+        qs = {'max-result': max_result, 'start-index': 0}
         if expand:
             qs['expand'] = 'plans.plan'
 
@@ -175,7 +174,7 @@ class BambooAPIClient(object):
             qs['start-index'] += plans['max-result']
 
 
-    def get_branches(self, plan_key, enabled_only=False):
+    def get_branches(self, plan_key, enabled_only=False, max_result=25):
         """
         Return all branches in a plan.
         
@@ -185,7 +184,7 @@ class BambooAPIClient(object):
         :return: Generator
         """
         #Build qs params
-        qs = {'max-result': 25, 'start-index': 0}
+        qs = {'max-result': max_result, 'start-index': 0}
         if enabled_only:
             qs['enabledOnly'] = 'true'
 
@@ -258,7 +257,7 @@ class BambooAPIClient(object):
 
     def get_branch_results(self, plan_key, branch_name, expand=None, favorite=False,
                            labels=None, issue_keys=None, include_all_states=False,
-                           continuable=False, build_state=None):
+                           continuable=False, build_state=None, max_result=25):
         """
         Returns a list of results for plan branch builds
 
@@ -275,7 +274,7 @@ class BambooAPIClient(object):
         :return: Generator
         """
         #Build qs params
-        qs = {'max-result': 25, 'start-index': 0}
+        qs = {'max-result': max_result, 'start-index': 0}
         if expand:
             valid_expands = ('artifacts',
                              'comments', 
@@ -330,3 +329,16 @@ class BambooAPIClient(object):
         response = self._get_response(url).json()
         return response
 
+    def pause(self):
+        """
+        Pause server
+        """
+        url = "{}/{}".format(self._get_url(self.SERVER_SERVICE), "pause")
+        return self._post_response(url).json()
+
+    def resume(self):
+        """
+        Resume server
+        """
+        url = "{}/{}".format(self._get_url(self.SERVER_SERVICE), "resume")
+        return self._post_response(url).json()
