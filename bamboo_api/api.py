@@ -224,14 +224,22 @@ class BambooAPIClient(object):
         r = self._post_response(url, data=data)
         r.raise_for_status()
 
-    def queue_build(self, plan_key):
+    def queue_build(self, plan_key, build_vars={}):
         """
         Queue a build for building
 
         :param project_key: str
+        :param build_vars: dict
         """
         url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)
-        return self._post_response(url).json()
+
+        # Custom builds
+        qs = {}
+        for k, v in build_vars.items():
+            qs_k = 'bamboo.variable.{}'.format(k)
+            qs[qs_k] = v
+
+        return self._post_response(url, qs).json()
 
     def get_build_queue(self):
         """
