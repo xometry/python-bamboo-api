@@ -16,7 +16,7 @@ class BambooAPIClient(object):
 
     # Endpoints
     BUILD_SERVICE = '/rest/api/latest/result'
-    PROJECT_SERVICE= 'rest/api/latest/project'
+    PROJECT_SERVICE = 'rest/api/latest/project'
     DEPLOY_SERVICE = '/rest/api/latest/deploy/project'
     ENVIRONMENT_SERVICE = '/rest/api/latest/deploy/environment/{env_id}/results'
     PLAN_SERVICE = '/rest/api/latest/plan'
@@ -44,7 +44,7 @@ class BambooAPIClient(object):
         Make the call to the service with the given queryset and whatever params
         were set initially (auth).
         """
-        res = self._session.get(url,  params=params or {}, headers={'Accept': 'application/json'})
+        res = self._session.get(url, params=params or {}, headers={'Accept': 'application/json'})
         if res.status_code != 200:
             raise Exception(res.reason)
         return res
@@ -77,7 +77,7 @@ class BambooAPIClient(object):
         :return: Generator
         """
         # Build starting qs params
-        qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand+",results.result").lstrip(',')}
+        qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand + ",results.result").lstrip(',')}
 
         # Get url
         if plan_key:
@@ -173,11 +173,10 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += plans['max-result']
 
-
     def get_branches(self, plan_key, enabled_only=False, max_result=25):
         """
         Return all branches in a plan.
-        
+
         :param plan_key: str
         :param enabled_only: bool
 
@@ -214,26 +213,33 @@ class BambooAPIClient(object):
         :return: dict Response
         """
         # Build qs params
-        qs = {}
+        #qs = {}
 
         # Get url
         url = self._get_url(self.DELETE_ACTION)
-        
+
         # Build Data Object
-        data={'buildKey' : build_key}
+        data = {'buildKey': build_key}
 
         r = self._post_response(url, data=data)
         r.raise_for_status()
 
-    def queue_build(self, plan_key):
+    def queue_build(self, plan_key, build_vars={}):
         """
         Queue a build for building
 
         :param project_key: str
+        :param build_vars: dict
         """
         url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)
-        return self._post_response(url).json()
 
+        # Custom builds
+        qs = {}
+        for k, v in build_vars.items():
+            qs_k = 'bamboo.variable.{}'.format(k)
+            qs[qs_k] = v
+
+        return self._post_response(url, qs).json()
 
     def get_build_queue(self):
         """
@@ -241,7 +247,6 @@ class BambooAPIClient(object):
         """
         url = "{}".format(self._get_url(self.QUEUE_SERVICE))
         return self._get_response(url).json()
-    
 
     def get_results(self, project_key=None, build_number=None):
         """
@@ -249,7 +254,7 @@ class BambooAPIClient(object):
         :param project_key: str
         :return: Generator
         """
-        if build_number != None and project_key != None:
+        if build_number is not None and project_key is not None:
             project_key = project_key + '-' + build_number
         url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
         response = self._get_response(url).json()
@@ -277,7 +282,7 @@ class BambooAPIClient(object):
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
             valid_expands = ('artifacts',
-                             'comments', 
+                             'comments',
                              'labels',
                              'jiraIssues',
                              'stages',
@@ -319,7 +324,6 @@ class BambooAPIClient(object):
             # Update paging info
             # Note: do this here to keep it current with yields
             qs['start-index'] += results['max-result']
-
 
     def get_projects(self):
         """
