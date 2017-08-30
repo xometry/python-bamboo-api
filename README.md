@@ -47,6 +47,22 @@ The following keys are supported
 - planKey
 - projectKey
 
+[https://jira.atlassian.com/browse/BAM-13037](BAM-13037)
+This API supports multiple expands options, provided as a list
+
+        valid_expands = set(['artifacts',
+                             'comments',
+                             'labels',
+                             'jiraIssues',
+                             'stages',
+                             'stages.stage',
+                             'stages.stage.results',
+                             'stages.stage.results.result'])
+
+The expand item(s) will be prefixed with 'results.result' as described in https://docs.atlassian.com/bamboo/REST/5.5.0/#d2e129.
+
+NOTE: The Bamboo 5.1x REST API may have issues with multiple expands.
+
 ## Supported Methods
 
 The supported methods are:

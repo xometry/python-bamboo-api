@@ -70,6 +70,19 @@ class BambooAPIClient(object):
         """
         return '{}:{}{}'.format(self._host, self._port, endpoint)
 
+    def _build_expand(self, expand):
+        valid_expands = set(['artifacts',
+                             'comments',
+                             'labels',
+                             'jiraIssues',
+                             'stages',
+                             'stages.stage',
+                             'stages.stage.results',
+                             'stages.stage.results.result'])
+        expands = map(lambda x: '.'.join(['results.result', x]),
+                      set(expand) & valid_expands)
+        return ','.join(expands)
+
     def get_builds_by_label(self, labels=None):
         """
         Get the master/branch builds in the Bamboo server via viewBuildsForLabel.action
@@ -113,17 +126,19 @@ class BambooAPIClient(object):
                 if nl is None:
                     break;
 
-    def get_builds(self, plan_key=None, labels=None, expand='', max_result=25):
+    def get_builds(self, plan_key=None, labels=None, expand=None, max_result=25):
         """
         Get the builds in the Bamboo server.
 
         :param plan_key: str
         :param labels: list str
-        :param expand: str (csv)
+        :param expand: list str
         :return: Generator
         """
         # Build starting qs params
-        qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand + ",results.result").lstrip(',')}
+        qs = {'max-result': max_result, 'start-index': 0}
+        if expand:
+            qs['expand'] = self._build_expand(expand)
         if labels:
             qs['label'] = ','.join(labels)
 
@@ -193,7 +208,8 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += response['max-result']
 
-    def get_plans(self, expand=False, max_result=25):
+
+    def get_plans(self, expand=None, max_result=25):
         """
         Return all the plans in a Bamboo server.
 
@@ -202,7 +218,7 @@ class BambooAPIClient(object):
         # Build starting qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
-            qs['expand'] = 'plans.plan'
+            qs['expand'] = self._build_expand(expand)
 
         # Get url for results
         url = self._get_url(self.PLAN_SERVICE)
@@ -296,21 +312,20 @@ class BambooAPIClient(object):
         url = "{}".format(self._get_url(self.QUEUE_SERVICE))
         return self._get_response(url).json()
 
-    def get_results(self, project_key=None, build_number=None, expand='', max_result=25):
+    def get_results(self, plan_key=None, build_number=None, expand=None, max_result=25):
         """
         Returns a list of results for builds
-        :param project_key: str
+        :param plan_key: str
         :return: Generator
         """
         #Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
-            qs['expand'] = expand + ',results.result'
+            qs['expand'] = self._build_expand(expand)
 
-        print "-->{}".format(qs)
-        if build_number is not None and project_key is not None:
-            project_key = project_key + '-' + build_number
-        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
+        if build_number is not None and plan_key is not None:
+            plan_key = plan_key + '-' + build_number
+        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), plan_key or 'all')
 
         # Cycle through paged results
         size = 1
@@ -334,7 +349,7 @@ class BambooAPIClient(object):
 
         :param plan_key: str
         :param branch_name: str
-        :param expand: str
+        :param expand: list str
         :param favorite: bool
         :param labels: list
         :param issue_keys: list
@@ -347,17 +362,7 @@ class BambooAPIClient(object):
         #Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
-            valid_expands = ('artifacts',
-                             'comments',
-                             'labels',
-                             'jiraIssues',
-                             'stages',
-                             'stages.stage',
-                             'stages.stage.results',
-                             'stages.stage.results.result')
-            if expand not in valid_expands:
-                raise ValueError('Incorrect value for \'expand\'. Valid values include: %s', ','.join(valid_expands))
-            qs['enabledOnly'] = expand
+            qs['expand'] = self._build_expand(expand)
         if favorite:
             qs['favorite'] = True
         if labels:
