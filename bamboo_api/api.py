@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import os
 import requests
 
+
 class BambooAPIClient(object):
     """
     Adapter for Bamboo's web service API.
@@ -113,21 +114,21 @@ class BambooAPIClient(object):
                 # Build links are clustered in three inside a td containing a
                 # span with build indicator icons.
                 soup = BeautifulSoup(response.text, 'html.parser')
-                for span in soup.find_all('span', {'class':['aui-icon','aui-icon-small']}):
+                for span in soup.find_all('span', {'class': ['aui-icon', 'aui-icon-small']}):
                     cell = span.find_parent('td')
                     if cell is not None and len(cell):
                         prj, plan, build = cell.find_all('a')[:3]
 
-                        yield { 'projectKey': os.path.basename(prj['href']),
-                                'planKey': os.path.basename(plan['href']),
-                                'buildKey': os.path.basename(build['href']) }
+                        yield {'projectKey': os.path.basename(prj['href']),
+                               'planKey': os.path.basename(plan['href']),
+                               'buildKey': os.path.basename(build['href'])}
 
                 # XXX rather than deconstruct the href, we advance our own
                 # qs{pageIndex} until there are no more nextLinks
                 page_index += 1
-                nl = soup.find('a', {'class':['nextLink']})
+                nl = soup.find('a', {'class': ['nextLink']})
                 if nl is None:
-                    break;
+                    break
 
     def get_builds(self, plan_key=None, labels=None, expand=None, max_result=25):
         """
@@ -211,7 +212,6 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += response['max-result']
 
-
     def get_plans(self, expand=None, max_result=25):
         """
         Return all the plans in a Bamboo server.
@@ -249,7 +249,7 @@ class BambooAPIClient(object):
 
         :return: Generator
         """
-        #Build qs params
+        # Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if enabled_only:
             qs['enabledOnly'] = 'true'
@@ -280,7 +280,7 @@ class BambooAPIClient(object):
         :return: dict Response
         """
         # Build qs params
-        #qs = {}
+        # qs = {}
 
         # Get url
         url = self._get_url(self.DELETE_ACTION)
@@ -321,7 +321,7 @@ class BambooAPIClient(object):
         :param plan_key: str
         :return: Generator
         """
-        #Build qs params
+        # Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
             qs['expand'] = self._build_expand(expand)
@@ -362,7 +362,7 @@ class BambooAPIClient(object):
 
         :return: Generator
         """
-        #Build qs params
+        # Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
             qs['expand'] = self._build_expand(expand)
