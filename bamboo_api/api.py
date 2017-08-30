@@ -295,7 +295,7 @@ class BambooAPIClient(object):
         """
         Queue a build for building
 
-        :param project_key: str
+        :param plan_key: str
         :param build_vars: dict
         """
         url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)

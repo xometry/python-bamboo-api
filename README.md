@@ -26,7 +26,7 @@ also specify a single plan to fetch all the builds for it, and expand
 to get more detailed information:
 
     bamboo = BambooAPIClient(user='admin', password='admin')
-    for build in bamboo.get_builds(project_key='MYPRJ-KEY', expand=True):
+    for build in bamboo.get_builds(plan_key='MYPRJ-KEY', expand=True):
         # do something with builds results...
 
 [https://jira.atlassian.com/browse/BAM-18428](BAM-18428)
@@ -40,7 +40,7 @@ If you want to return a list of master and branch builds, one way is to use the 
 
     builds = bamboo.get_builds_by_label(labels=labels)
     for key in set(map(lambda x: x['planKey'], builds)):
-        results = bamboo.get_results(project_key=key)
+        results = bamboo.get_results(plan_key=key)
 
 The following keys are supported
 - buildKey
