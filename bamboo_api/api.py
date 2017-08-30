@@ -94,21 +94,24 @@ class BambooAPIClient(object):
         :return: Generator
         """
 
-        # Latest build for all plans
+        # Until BAM-18428, call the UI
         url = self._get_url(self.BFL_ACTION)
         qs = {}
-        # Cycle through paged results
+
+        # Cannot search multiple labels in a single shot,
+        # so iterate search - caller should de-dupe.
         for label in labels:
             qs['labelName'] = label
-            page_index = 1
 
+            # Cycle through paged results
+            page_index = 1
             while 1:
                 qs['pageIndex'] = page_index
 
-                # Get page
                 response = self._get_response(url, qs)
 
-                # parse page for build links
+                # Build links are clustered in three inside a td containing a
+                # span with build indicator icons.
                 soup = BeautifulSoup(response.text, 'html.parser')
                 for span in soup.find_all('span', {'class':['aui-icon','aui-icon-small']}):
                     cell = span.find_parent('td')
