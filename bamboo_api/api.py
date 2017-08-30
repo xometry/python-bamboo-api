@@ -3,8 +3,9 @@ This module contains the BambooAPIClient, used for communicating with the
 Bamboo server web service API.
 """
 
+from bs4 import BeautifulSoup
+import os
 import requests
-
 
 class BambooAPIClient(object):
     """
@@ -23,6 +24,7 @@ class BambooAPIClient(object):
     QUEUE_SERVICE = '/rest/api/latest/queue'
     RESULT_SERVICE = '/rest/api/latest/result'
     SERVER_SERVICE = '/rest/api/latest/server'
+    BFL_ACTION = '/build/label/viewBuildsForLabel.action'
 
     BRANCH_SERVICE = PLAN_SERVICE + '/{key}/branch'
     BRANCH_RESULT_SERVICE = RESULT_SERVICE + '/{key}/branch/{branch_name}'
@@ -68,16 +70,62 @@ class BambooAPIClient(object):
         """
         return '{}:{}{}'.format(self._host, self._port, endpoint)
 
-    def get_builds(self, plan_key=None, expand='', max_result=25):
+    def get_builds_by_label(self, labels=None):
+        """
+        Get the master/branch builds in the Bamboo server via viewBuildsForLabel.action
+        - No REST API for this: https://jira.atlassian.com/browse/BAM-18428
+        - Scrape https://bamboo/build/label/viewBuildsForLabel.action?pageIndex=2&pageSize=50&labelName=foo
+        Simple response API dict projectKey, planKey and buildKey
+
+        :param labels: [str]
+        :return: Generator
+        """
+
+        # Latest build for all plans
+        url = self._get_url(self.BFL_ACTION)
+        qs = {}
+        # Cycle through paged results
+        for label in labels:
+            qs['labelName'] = label
+            page_index = 1
+
+            while 1:
+                qs['pageIndex'] = page_index
+
+                # Get page
+                response = self._get_response(url, qs)
+
+                # parse page for build links
+                soup = BeautifulSoup(response.text, 'html.parser')
+                for span in soup.find_all('span', {'class':['aui-icon','aui-icon-small']}):
+                    cell = span.find_parent('td')
+                    if cell is not None and len(cell):
+                        prj, plan, build = cell.find_all('a')[:3]
+
+                        yield { 'projectKey': os.path.basename(prj['href']),
+                                'planKey': os.path.basename(plan['href']),
+                                'buildKey': os.path.basename(build['href']) }
+
+                # XXX rather than deconstruct the href, we advance our own
+                # qs{pageIndex} until there are no more nextLinks
+                page_index += 1
+                nl = soup.find('a', {'class':['nextLink']})
+                if nl is None:
+                    break;
+
+    def get_builds(self, plan_key=None, labels=None, expand='', max_result=25):
         """
         Get the builds in the Bamboo server.
 
         :param plan_key: str
-        :param expand: boolean
+        :param labels: list str
+        :param expand: str (csv)
         :return: Generator
         """
         # Build starting qs params
         qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand + ",results.result").lstrip(',')}
+        if labels:
+            qs['label'] = ','.join(labels)
 
         # Get url
         if plan_key:
