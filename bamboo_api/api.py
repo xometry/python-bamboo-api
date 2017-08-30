@@ -296,19 +296,37 @@ class BambooAPIClient(object):
         url = "{}".format(self._get_url(self.QUEUE_SERVICE))
         return self._get_response(url).json()
 
-    def get_results(self, project_key=None, build_number=None):
+    def get_results(self, project_key=None, build_number=None, expand='', max_result=25):
         """
         Returns a list of results for builds
         :param project_key: str
         :return: Generator
         """
+        #Build qs params
+        qs = {'max-result': max_result, 'start-index': 0}
+        if expand:
+            qs['expand'] = expand + ',results.result'
+
+        print "-->{}".format(qs)
         if build_number is not None and project_key is not None:
             project_key = project_key + '-' + build_number
         url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
-        response = self._get_response(url).json()
-        return response
 
-    def get_branch_results(self, plan_key, branch_name, expand=None, favorite=False,
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield branches
+            response = self._get_response(url, qs).json()
+            results = response['results']
+            size = results['size']
+            for r in results['result']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += results['max-result']
+
+    def get_branch_results(self, plan_key, branch_name=None, expand=None, favorite=False,
                            labels=None, issue_keys=None, include_all_states=False,
                            continuable=False, build_state=None, max_result=25):
         """

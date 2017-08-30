@@ -29,7 +29,7 @@ to get more detailed information:
     for build in bamboo.get_builds(project_key='MYPRJ-KEY', expand=True):
         # do something with builds results...
 
-[https://jira.atlassian.com/browse/BAM-18428](BMA-18428)
+[https://jira.atlassian.com/browse/BAM-18428](BAM-18428)
 The REST API can return master builds by label, passing in an array of labels
 
     labels = ['lab1','lab2']
