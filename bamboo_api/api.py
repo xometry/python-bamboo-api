@@ -3,6 +3,8 @@ This module contains the BambooAPIClient, used for communicating with the
 Bamboo server web service API.
 """
 
+from bs4 import BeautifulSoup
+import os
 import requests
 
 
@@ -23,6 +25,7 @@ class BambooAPIClient(object):
     QUEUE_SERVICE = '/rest/api/latest/queue'
     RESULT_SERVICE = '/rest/api/latest/result'
     SERVER_SERVICE = '/rest/api/latest/server'
+    BFL_ACTION = '/build/label/viewBuildsForLabel.action'
 
     BRANCH_SERVICE = PLAN_SERVICE + '/{key}/branch'
     BRANCH_RESULT_SERVICE = RESULT_SERVICE + '/{key}/branch/{branch_name}'
@@ -68,16 +71,80 @@ class BambooAPIClient(object):
         """
         return '{}:{}{}'.format(self._host, self._port, endpoint)
 
-    def get_builds(self, plan_key=None, expand='', max_result=25):
+    def _build_expand(self, expand):
+        valid_expands = set(['artifacts',
+                             'comments',
+                             'labels',
+                             'jiraIssues',
+                             'stages',
+                             'stages.stage',
+                             'stages.stage.results',
+                             'stages.stage.results.result'])
+        expands = map(lambda x: '.'.join(['results.result', x]),
+                      set(expand) & valid_expands)
+        return ','.join(expands)
+
+    def get_builds_by_label(self, labels=None):
+        """
+        Get the master/branch builds in the Bamboo server via viewBuildsForLabel.action
+        - No REST API for this: https://jira.atlassian.com/browse/BAM-18428
+        - Scrape https://bamboo/build/label/viewBuildsForLabel.action?pageIndex=2&pageSize=50&labelName=foo
+        Simple response API dict projectKey, planKey and buildKey
+
+        :param labels: [str]
+        :return: Generator
+        """
+
+        # Until BAM-18428, call the UI
+        url = self._get_url(self.BFL_ACTION)
+        qs = {}
+
+        # Cannot search multiple labels in a single shot,
+        # so iterate search - caller should de-dupe.
+        for label in labels:
+            qs['labelName'] = label
+
+            # Cycle through paged results
+            page_index = 1
+            while 1:
+                qs['pageIndex'] = page_index
+
+                response = self._get_response(url, qs)
+
+                # Build links are clustered in three inside a td containing a
+                # span with build indicator icons.
+                soup = BeautifulSoup(response.text, 'html.parser')
+                for span in soup.find_all('span', {'class': ['aui-icon', 'aui-icon-small']}):
+                    cell = span.find_parent('td')
+                    if cell is not None and len(cell):
+                        prj, plan, build = cell.find_all('a')[:3]
+
+                        yield {'projectKey': os.path.basename(prj['href']),
+                               'planKey': os.path.basename(plan['href']),
+                               'buildKey': os.path.basename(build['href'])}
+
+                # XXX rather than deconstruct the href, we advance our own
+                # qs{pageIndex} until there are no more nextLinks
+                page_index += 1
+                nl = soup.find('a', {'class': ['nextLink']})
+                if nl is None:
+                    break
+
+    def get_builds(self, plan_key=None, labels=None, expand=None, max_result=25):
         """
         Get the builds in the Bamboo server.
 
         :param plan_key: str
-        :param expand: boolean
+        :param labels: list str
+        :param expand: list str
         :return: Generator
         """
         # Build starting qs params
-        qs = {'max-result': max_result, 'start-index': 0, 'expand': (expand + ",results.result").lstrip(',')}
+        qs = {'max-result': max_result, 'start-index': 0}
+        if expand:
+            qs['expand'] = self._build_expand(expand)
+        if labels:
+            qs['label'] = ','.join(labels)
 
         # Get url
         if plan_key:
@@ -145,7 +212,7 @@ class BambooAPIClient(object):
             # Note: do this here to keep it current with yields
             qs['start-index'] += response['max-result']
 
-    def get_plans(self, expand=False, max_result=25):
+    def get_plans(self, expand=None, max_result=25):
         """
         Return all the plans in a Bamboo server.
 
@@ -154,7 +221,7 @@ class BambooAPIClient(object):
         # Build starting qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
-            qs['expand'] = 'plans.plan'
+            qs['expand'] = self._build_expand(expand)
 
         # Get url for results
         url = self._get_url(self.PLAN_SERVICE)
@@ -182,7 +249,7 @@ class BambooAPIClient(object):
 
         :return: Generator
         """
-        #Build qs params
+        # Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if enabled_only:
             qs['enabledOnly'] = 'true'
@@ -213,7 +280,7 @@ class BambooAPIClient(object):
         :return: dict Response
         """
         # Build qs params
-        #qs = {}
+        # qs = {}
 
         # Get url
         url = self._get_url(self.DELETE_ACTION)
@@ -228,7 +295,7 @@ class BambooAPIClient(object):
         """
         Queue a build for building
 
-        :param project_key: str
+        :param plan_key: str
         :param build_vars: dict
         """
         url = "{}/{}".format(self._get_url(self.QUEUE_SERVICE), plan_key)
@@ -248,19 +315,36 @@ class BambooAPIClient(object):
         url = "{}".format(self._get_url(self.QUEUE_SERVICE))
         return self._get_response(url).json()
 
-    def get_results(self, project_key=None, build_number=None):
+    def get_results(self, plan_key=None, build_number=None, expand=None, max_result=25):
         """
         Returns a list of results for builds
-        :param project_key: str
+        :param plan_key: str
         :return: Generator
         """
-        if build_number is not None and project_key is not None:
-            project_key = project_key + '-' + build_number
-        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), project_key or 'all')
-        response = self._get_response(url).json()
-        return response
+        # Build qs params
+        qs = {'max-result': max_result, 'start-index': 0}
+        if expand:
+            qs['expand'] = self._build_expand(expand)
 
-    def get_branch_results(self, plan_key, branch_name, expand=None, favorite=False,
+        if build_number is not None and plan_key is not None:
+            plan_key = plan_key + '-' + build_number
+        url = "{}/{}".format(self._get_url(self.RESULT_SERVICE), plan_key or 'all')
+
+        # Cycle through paged results
+        size = 1
+        while qs['start-index'] < size:
+            # Get page, update page size and yield branches
+            response = self._get_response(url, qs).json()
+            results = response['results']
+            size = results['size']
+            for r in results['result']:
+                yield r
+
+            # Update paging info
+            # Note: do this here to keep it current with yields
+            qs['start-index'] += results['max-result']
+
+    def get_branch_results(self, plan_key, branch_name=None, expand=None, favorite=False,
                            labels=None, issue_keys=None, include_all_states=False,
                            continuable=False, build_state=None, max_result=25):
         """
@@ -268,7 +352,7 @@ class BambooAPIClient(object):
 
         :param plan_key: str
         :param branch_name: str
-        :param expand: str
+        :param expand: list str
         :param favorite: bool
         :param labels: list
         :param issue_keys: list
@@ -278,20 +362,10 @@ class BambooAPIClient(object):
 
         :return: Generator
         """
-        #Build qs params
+        # Build qs params
         qs = {'max-result': max_result, 'start-index': 0}
         if expand:
-            valid_expands = ('artifacts',
-                             'comments',
-                             'labels',
-                             'jiraIssues',
-                             'stages',
-                             'stages.stage',
-                             'stages.stage.results',
-                             'stages.stage.results.result')
-            if expand not in valid_expands:
-                raise ValueError('Incorrect value for \'expand\'. Valid values include: %s', ','.join(valid_expands))
-            qs['enabledOnly'] = expand
+            qs['expand'] = self._build_expand(expand)
         if favorite:
             qs['favorite'] = True
         if labels:
