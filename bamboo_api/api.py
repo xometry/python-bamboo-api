@@ -32,12 +32,13 @@ class BambooAPIClient(object):
 
     DELETE_ACTION = '/chain/admin/deleteChain!doDelete.action'
 
-    def __init__(self, host=None, port=None, user=None, password=None):
+    def __init__(self, host=None, port=None, user=None, password=None, prefix=None):
         """
         Set connection and auth information (if user+password were provided).
         """
         self._host = host or self.DEFAULT_HOST
         self._port = port or self.DEFAULT_PORT
+        self._prefix = prefix or ''
         self._session = requests.Session()
         if user and password:
             self._session.auth = (user, password)
@@ -69,7 +70,7 @@ class BambooAPIClient(object):
         :param endpoint: path to service endpoint
         :return: full url to make request
         """
-        return '{}:{}{}'.format(self._host, self._port, endpoint)
+        return '{}:{}{}{}'.format(self._host, self._port, self._prefix, endpoint)
 
     def _build_expand(self, expand):
         valid_expands = set(['artifacts',
