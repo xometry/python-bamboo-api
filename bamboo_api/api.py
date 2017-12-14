@@ -63,6 +63,16 @@ class BambooAPIClient(object):
             raise Exception(res.reason)
         return res
 
+    def _put_response(self, url, params=None):
+        """
+        Put to the service with the given queryset and whatever params
+        were set initially (auth).
+        """
+        res = self._session.put(url, params=params or {}, headers={'Accept': 'application/json'})
+        if res.status_code != 200:
+            raise Exception(res.reason)
+        return res
+
     def _get_url(self, endpoint):
         """
         Get full url string for host, port and given endpoint.
@@ -308,6 +318,29 @@ class BambooAPIClient(object):
             qs[qs_k] = v
 
         return self._post_response(url, qs).json()
+
+    def continue_build(self, plan_key, build_number, stage=None, executeAllStages=False, build_vars={}):
+        """
+        Queue a build for continuation
+
+        :param plan_key: str
+        :param build_vars: dict
+        :param build_number: int
+        :param stage: str
+        """
+        url = "{}/{}-{}".format(self._get_url(self.QUEUE_SERVICE), plan_key, build_number)
+
+        # Custom builds
+        qs = {}
+        if executeAllStages:
+            qs['executeAllStages']='true'
+        if stage:
+            qs['stage']=stage
+        for k, v in build_vars.items():
+            qs_k = 'bamboo.variable.{}'.format(k)
+            qs[qs_k] = v
+
+        return self._put_response(url, qs).json()
 
     def get_build_queue(self):
         """
