@@ -16,8 +16,6 @@ class BambooAPIClient(object):
     DEFAULT_HOST = 'http://localhost'
     DEFAULT_PORT = 8085
 
-    DEFAULT_SSL_VERIFY = True
-
     # Endpoints
     BUILD_SERVICE = '/rest/api/latest/result'
     PROJECT_SERVICE = 'rest/api/latest/project'
@@ -44,7 +42,8 @@ class BambooAPIClient(object):
         self._session = requests.Session()
         if user and password:
             self._session.auth = (user, password)
-        self._session.verify = ssl_verify or self.DEFAULT_SSL_VERIFY
+        if ssl_verify is not None:
+            self._session.verify = ssl_verify
 
     def _get_response(self, url, params=None):
         """
