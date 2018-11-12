@@ -21,7 +21,7 @@ setup(
     name='bamboo_api',
 
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.2.0`',
+    version='0.2.1`',
 
     description='Bamboo API Client',
     long_description=long_description,
