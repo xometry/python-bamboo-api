@@ -17,11 +17,13 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'DESCRIPTION.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+VERSION = '0.2.1'
+
 setup(
     name='bamboo_api',
 
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.2.1`',
+    version=VERSION,
 
     description='Bamboo API Client',
     long_description=long_description,
